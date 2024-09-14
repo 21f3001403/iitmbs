@@ -1,0 +1,57 @@
+Step 1: Store the API Key in Secrets Manager
+Go to the AWS Management Console.
+Navigate to Secrets Manager.
+Click Store a new secret.
+Choose Other type of secret and set Key/Value with the key being something like api_key and the value being your API key.
+Set a name like translation-api-key and store the secret.
+
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:your-region:your-account-id:secret:translation-api-key"
+    }
+  ]
+}
+
+
+import boto3
+import json
+import requests
+
+# Fetch API key from AWS Secrets Manager
+def get_api_key_from_secrets(secret_name):
+    client = boto3.client('secretsmanager')
+    response = client.get_secret_value(SecretId=secret_name)
+    secret = json.loads(response['SecretString'])
+    return secret['api_key']
+
+# Translation function
+def translate_text_with_api_key(text, target):
+    api_key = get_api_key_from_secrets('translation-api-key')  # Change to your secret name
+    url = "https://translation.googleapis.com/language/translate/v2"
+    params = {
+        'q': text,
+        'target': target,
+        'key': api_key
+    }
+    response = requests.get(url, params=params)
+    result = response.json()
+    if 'data' in result:
+        return result['data']['translations'][0]['translatedText']
+    else:
+        return result.get('error', {}).get('message', 'Translation failed')
+
+# Example usage inside AWS Lambda handler
+def lambda_handler(event, context):
+    source_text = "ನೀವು ಹೇಗಿದ್ದೀರಿ?"  # Kannada
+    translated_text = translate_text_with_api_key(source_text, "en")
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'translated_text': translated_text
+        })
+    }
